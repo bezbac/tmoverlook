@@ -26,6 +26,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    List {},
     Apply {
         #[arg(short, long, value_name = "FILE")]
         config: Option<String>,
@@ -135,6 +136,14 @@ fn main() -> Result<()> {
         .init();
 
     match &cli.command {
+        Some(Commands::List {}) => {
+            let cache = read_cache()?;
+
+            info!("Currenly ignored paths:");
+            for path in cache.paths {
+                info!("{}", path)
+            }
+        }
         Some(Commands::Apply { preview, config }) => {
             if *preview {
                 info!("Preview mode is active, no changes will be applied",)
