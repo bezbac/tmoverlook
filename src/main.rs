@@ -5,7 +5,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use log::{info, LevelFilter};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 use std::fs::{self, DirEntry};
 use std::io::Write;
 use std::path::PathBuf;
@@ -38,7 +38,7 @@ enum Commands {
 }
 
 trait Evaluatable {
-    fn evaluate(&self) -> Result<Vec<PathBuf>>;
+    fn evaluate(&self) -> Result<BTreeSet<PathBuf>>;
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -47,10 +47,14 @@ struct PathRule {
 }
 
 impl Evaluatable for PathRule {
-    fn evaluate(&self) -> Result<Vec<PathBuf>> {
-        Ok(vec![fs::canonicalize(
+    fn evaluate(&self) -> Result<BTreeSet<PathBuf>> {
+        let mut result = BTreeSet::new();
+
+        result.insert(fs::canonicalize(
             shellexpand::tilde(&self.path).to_string(),
-        )?])
+        )?);
+
+        Ok(result)
     }
 }
 
@@ -60,7 +64,7 @@ struct GitRepositoriesRule {
 }
 
 impl Evaluatable for GitRepositoriesRule {
-    fn evaluate(&self) -> Result<Vec<PathBuf>> {
+    fn evaluate(&self) -> Result<BTreeSet<PathBuf>> {
         info!("Searching for git repositories");
 
         let spinner_style = ProgressStyle::with_template("{spinner} {wide_msg}")
@@ -129,7 +133,7 @@ enum Rule {
 }
 
 impl Evaluatable for Rule {
-    fn evaluate(&self) -> Result<Vec<PathBuf>> {
+    fn evaluate(&self) -> Result<BTreeSet<PathBuf>> {
         match &self {
             Rule::Path(rule) => rule.evaluate(),
             Rule::GitRepositories(rule) => rule.evaluate(),
@@ -144,14 +148,14 @@ struct Config {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Cache {
-    paths: HashSet<String>,
+    paths: BTreeSet<String>,
 }
 
 fn read_cache() -> Result<Cache> {
     let input = fs::read_to_string(DEFAULT_CACHE_PATH.as_str());
     let cache = match input {
         Err(_) => Cache {
-            paths: HashSet::new(),
+            paths: BTreeSet::new(),
         },
         Ok(input) => toml::from_str(&input)?,
     };
@@ -229,7 +233,7 @@ fn main() -> Result<()> {
             let config = read_config(config.as_deref());
             let cache = read_cache()?;
 
-            let mut paths: HashSet<String> = HashSet::new();
+            let mut paths: BTreeSet<String> = BTreeSet::new();
 
             for rule in config?.rules {
                 for path in &rule.evaluate()? {
@@ -239,7 +243,8 @@ fn main() -> Result<()> {
                 }
             }
 
-            let combined_paths: HashSet<&String> = paths.iter().chain(cache.paths.iter()).collect();
+            let combined_paths: BTreeSet<&String> =
+                paths.iter().chain(cache.paths.iter()).collect();
 
             info!("Changes:");
             for path in combined_paths {
