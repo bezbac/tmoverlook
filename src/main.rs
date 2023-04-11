@@ -38,7 +38,7 @@ enum Commands {
 }
 
 trait Evaluatable {
-    fn evaluate(&self) -> Result<BTreeSet<PathBuf>>;
+    fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()>;
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -47,14 +47,16 @@ struct PathRule {
 }
 
 impl Evaluatable for PathRule {
-    fn evaluate(&self) -> Result<BTreeSet<PathBuf>> {
-        let mut result = BTreeSet::new();
+    fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()> {
+        let expanded = fs::canonicalize(shellexpand::tilde(&self.path).to_string())?
+            .to_str()
+            .map(|str| str.to_string());
 
-        result.insert(fs::canonicalize(
-            shellexpand::tilde(&self.path).to_string(),
-        )?);
+        if let Some(path) = expanded {
+            paths.insert(path);
+        }
 
-        Ok(result)
+        Ok(())
     }
 }
 
@@ -64,7 +66,7 @@ struct GitRepositoriesRule {
 }
 
 impl Evaluatable for GitRepositoriesRule {
-    fn evaluate(&self) -> Result<BTreeSet<PathBuf>> {
+    fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()> {
         info!("Searching for git repositories");
 
         let spinner_style = ProgressStyle::with_template("{spinner} {wide_msg}")
@@ -74,9 +76,7 @@ impl Evaluatable for GitRepositoriesRule {
         let pb = ProgressBar::new(0);
         pb.set_style(spinner_style);
 
-        let mut paths: BTreeSet<PathBuf> = BTreeSet::new();
-
-        fn walk(pb: &ProgressBar, found_directories: &mut BTreeSet<PathBuf>, dir: &PathBuf) {
+        fn walk(pb: &ProgressBar, found_directories: &mut BTreeSet<String>, dir: &PathBuf) {
             pb.inc(1);
             pb.set_message(format!("{}", dir.display()));
 
@@ -99,8 +99,12 @@ impl Evaluatable for GitRepositoriesRule {
 
                 for dir in &subdirectories {
                     if dir.path().ends_with(".git") {
-                        if let Some(parent) = dir.path().parent() {
-                            found_directories.insert(parent.to_path_buf());
+                        if let Some(Some(parent)) = dir
+                            .path()
+                            .parent()
+                            .map(|p| p.to_str().map(|str| str.to_string()))
+                        {
+                            found_directories.insert(parent);
                         }
                     }
                 }
@@ -113,14 +117,14 @@ impl Evaluatable for GitRepositoriesRule {
 
         for search_dir in &self.search {
             let root_dir = fs::canonicalize(shellexpand::tilde(search_dir).to_string())?;
-            walk(&pb, &mut paths, &root_dir);
+            walk(&pb, paths, &root_dir);
         }
 
         pb.finish_and_clear();
 
         info!("Found {} git repositories", paths.len());
 
-        Ok(paths.into_iter().collect())
+        Ok(())
     }
 }
 
@@ -133,10 +137,10 @@ enum Rule {
 }
 
 impl Evaluatable for Rule {
-    fn evaluate(&self) -> Result<BTreeSet<PathBuf>> {
+    fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()> {
         match &self {
-            Rule::Path(rule) => rule.evaluate(),
-            Rule::GitRepositories(rule) => rule.evaluate(),
+            Rule::Path(rule) => rule.evaluate(paths),
+            Rule::GitRepositories(rule) => rule.evaluate(paths),
         }
     }
 }
@@ -208,6 +212,13 @@ enum Diff {
     Removed,
 }
 
+fn get_rule_priority(rule: &Rule) -> usize {
+    match &rule {
+        Rule::Path(_) => 2,
+        Rule::GitRepositories(_) => 1,
+    }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -233,14 +244,14 @@ fn main() -> Result<()> {
             let config = read_config(config.as_deref());
             let cache = read_cache()?;
 
-            let mut paths: BTreeSet<String> = BTreeSet::new();
+            let mut paths: BTreeSet<String> = cache.paths.clone();
 
-            for rule in config?.rules {
-                for path in &rule.evaluate()? {
-                    if let Some(path) = path.to_str() {
-                        paths.insert(String::from(path));
-                    }
-                }
+            let mut rules = config?.rules;
+
+            rules.sort_by_key(|a| std::cmp::Reverse(get_rule_priority(a)));
+
+            for rule in rules {
+                rule.evaluate(&mut paths)?;
             }
 
             let combined_paths: BTreeSet<&String> =
@@ -276,7 +287,9 @@ fn main() -> Result<()> {
             }
 
             if !preview {
-                write_cache(&Cache { paths })?
+                write_cache(&Cache {
+                    paths: paths.iter().map(|e| e.to_string()).collect(),
+                })?
             }
         }
         None => {}
