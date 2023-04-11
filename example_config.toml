@@ -1,3 +1,7 @@
 [[rules]]
 type = "path"
 path = "~/Downloads"
+
+[[rules]]
+type = "git_repositories"
+search = ["~/Documents"]

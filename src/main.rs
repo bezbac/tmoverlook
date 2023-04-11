@@ -1,11 +1,12 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use env_logger::Builder;
+use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use log::{info, LevelFilter};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::fs;
+use std::collections::{BTreeSet, HashSet};
+use std::fs::{self, DirEntry};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
@@ -36,9 +37,87 @@ enum Commands {
     },
 }
 
+trait Evaluatable {
+    fn evaluate(&self) -> Result<Vec<PathBuf>>;
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct PathRule {
     path: String,
+}
+
+impl Evaluatable for PathRule {
+    fn evaluate(&self) -> Result<Vec<PathBuf>> {
+        Ok(vec![fs::canonicalize(
+            shellexpand::tilde(&self.path).to_string(),
+        )?])
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct GitRepositoriesRule {
+    search: Vec<String>,
+}
+
+impl Evaluatable for GitRepositoriesRule {
+    fn evaluate(&self) -> Result<Vec<PathBuf>> {
+        info!("Searching for git repositories");
+
+        let spinner_style = ProgressStyle::with_template("{spinner} {wide_msg}")
+            .unwrap()
+            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
+
+        let pb = ProgressBar::new(0);
+        pb.set_style(spinner_style);
+
+        let mut paths: BTreeSet<PathBuf> = BTreeSet::new();
+
+        fn walk(pb: &ProgressBar, found_directories: &mut BTreeSet<PathBuf>, dir: &PathBuf) {
+            pb.inc(1);
+            pb.set_message(format!("{}", dir.display()));
+
+            if found_directories
+                .iter()
+                .any(|already_found_dirs| dir.starts_with(already_found_dirs))
+            {
+                return;
+            }
+
+            if let Ok(entries) = fs::read_dir(dir) {
+                let subdirectories: Vec<DirEntry> = entries
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.metadata()
+                            .map(|metadata| metadata.is_dir())
+                            .unwrap_or(false)
+                    })
+                    .collect();
+
+                for dir in &subdirectories {
+                    if dir.path().ends_with(".git") {
+                        if let Some(parent) = dir.path().parent() {
+                            found_directories.insert(parent.to_path_buf());
+                        }
+                    }
+                }
+
+                for dir in &subdirectories {
+                    walk(pb, found_directories, &dir.path());
+                }
+            }
+        }
+
+        for search_dir in &self.search {
+            let root_dir = fs::canonicalize(shellexpand::tilde(search_dir).to_string())?;
+            walk(&pb, &mut paths, &root_dir);
+        }
+
+        pb.finish_and_clear();
+
+        info!("Found {} git repositories", paths.len());
+
+        Ok(paths.into_iter().collect())
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -46,6 +125,16 @@ struct PathRule {
 #[serde(rename_all = "snake_case")]
 enum Rule {
     Path(PathRule),
+    GitRepositories(GitRepositoriesRule),
+}
+
+impl Evaluatable for Rule {
+    fn evaluate(&self) -> Result<Vec<PathBuf>> {
+        match &self {
+            Rule::Path(rule) => rule.evaluate(),
+            Rule::GitRepositories(rule) => rule.evaluate(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -85,18 +174,6 @@ fn read_config(path: Option<&str>) -> Result<Config> {
     let input = fs::read_to_string(config_path)?;
     let config: Config = toml::from_str(&input)?;
     Ok(config)
-}
-
-fn evaluate_rule(rule: &Rule) -> Result<Vec<PathBuf>> {
-    let mut paths = vec![];
-
-    match rule {
-        Rule::Path(PathRule { path }) => {
-            paths.push(fs::canonicalize(shellexpand::tilde(&path).to_string())?)
-        }
-    }
-
-    Ok(paths)
 }
 
 fn add_exclusion(path: &str) -> Result<()> {
@@ -155,7 +232,7 @@ fn main() -> Result<()> {
             let mut paths: HashSet<String> = HashSet::new();
 
             for rule in config?.rules {
-                for path in evaluate_rule(&rule)? {
+                for path in &rule.evaluate()? {
                     if let Some(path) = path.to_str() {
                         paths.insert(String::from(path));
                     }
