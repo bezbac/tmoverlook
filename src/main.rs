@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use std::fs::{self, DirEntry};
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Output};
 
 lazy_static! {
     static ref DEFAULT_CONFIG_PATH: String =
@@ -55,6 +55,46 @@ impl Evaluatable for PathRule {
         if let Some(path) = expanded {
             paths.insert(path);
         }
+
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+enum Shell {
+    Zsh,
+    Bash,
+}
+
+fn execute_shell_command(shell: &Shell, command: &str) -> Result<Output> {
+    let output = match shell {
+        Shell::Zsh => Command::new("zsh").arg("-c").arg(command).output()?,
+        Shell::Bash => Command::new("bash").arg("-c").arg(command).output()?,
+    };
+
+    Ok(output)
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct EvalRule {
+    command: String,
+    shell: Shell,
+}
+
+impl Evaluatable for EvalRule {
+    fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()> {
+        let output = execute_shell_command(&self.shell, &self.command)?;
+
+        assert!(output.status.success());
+
+        let path = PathBuf::from(String::from_utf8(output.stdout.to_vec())?)
+            .to_str()
+            .unwrap()
+            .trim()
+            .to_string();
+
+        paths.insert(path);
 
         Ok(())
     }
@@ -133,6 +173,7 @@ impl Evaluatable for GitRepositoriesRule {
 #[serde(rename_all = "snake_case")]
 enum Rule {
     Path(PathRule),
+    Eval(EvalRule),
     GitRepositories(GitRepositoriesRule),
 }
 
@@ -140,6 +181,7 @@ impl Evaluatable for Rule {
     fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()> {
         match &self {
             Rule::Path(rule) => rule.evaluate(paths),
+            Rule::Eval(rule) => rule.evaluate(paths),
             Rule::GitRepositories(rule) => rule.evaluate(paths),
         }
     }
@@ -214,7 +256,8 @@ enum Diff {
 
 fn get_rule_priority(rule: &Rule) -> usize {
     match &rule {
-        Rule::Path(_) => 2,
+        Rule::Path(_) => 3,
+        Rule::Eval(_) => 2,
         Rule::GitRepositories(_) => 1,
     }
 }

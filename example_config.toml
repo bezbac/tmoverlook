@@ -1,7 +1,15 @@
+# Ignore download directory
 [[rules]]
 type = "path"
 path = "~/Downloads"
 
+# Ignore all git repositories
 [[rules]]
 type = "git_repositories"
 search = ["~/Documents"]
+
+# Ignore pnpm store
+[[rules]]
+type = "eval"
+shell = "zsh"
+command = "pnpm store path"
