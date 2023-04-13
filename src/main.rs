@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use dialoguer::Confirm;
 use env_logger::Builder;
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
@@ -34,6 +35,9 @@ enum Commands {
 
         #[arg(short, long)]
         preview: bool,
+
+        #[arg(short, long)]
+        yes: bool,
     },
 }
 
@@ -248,6 +252,7 @@ fn remove_exclusion(path: &str) -> Result<()> {
     Ok(())
 }
 
+#[derive(PartialEq, PartialOrd, Eq, Ord)]
 enum Diff {
     Unchanged,
     Added,
@@ -279,7 +284,11 @@ fn main() -> Result<()> {
                 info!("{}", path)
             }
         }
-        Some(Commands::Apply { preview, config }) => {
+        Some(Commands::Apply {
+            preview,
+            config,
+            yes,
+        }) => {
             if *preview {
                 info!("Preview mode is active, no changes will be applied",)
             }
@@ -297,22 +306,27 @@ fn main() -> Result<()> {
                 rule.evaluate(&mut paths)?;
             }
 
-            let combined_paths: BTreeSet<&String> =
-                paths.iter().chain(cache.paths.iter()).collect();
+            let changes: BTreeSet<_> = paths
+                .iter()
+                .chain(cache.paths.iter())
+                .map(|p| {
+                    let is_in_cache = cache.paths.contains(p);
+                    let is_in_new_list = paths.contains(p);
+
+                    let operation: Diff = if is_in_cache && is_in_new_list {
+                        Diff::Unchanged
+                    } else if is_in_cache && !is_in_new_list {
+                        Diff::Removed
+                    } else {
+                        Diff::Added
+                    };
+
+                    (p, operation)
+                })
+                .collect();
 
             info!("Changes:");
-            for path in combined_paths {
-                let is_in_cache = cache.paths.contains(path);
-                let is_in_new_list = paths.contains(path);
-
-                let operation: Diff = if is_in_cache && is_in_new_list {
-                    Diff::Unchanged
-                } else if is_in_cache && !is_in_new_list {
-                    Diff::Removed
-                } else {
-                    Diff::Added
-                };
-
+            for (path, operation) in &changes {
                 let diff_char = match operation {
                     Diff::Unchanged => "·",
                     Diff::Added => "+",
@@ -320,20 +334,39 @@ fn main() -> Result<()> {
                 };
 
                 info!("{} {}", diff_char, path);
+            }
 
-                if !*preview {
-                    match operation {
-                        Diff::Unchanged | Diff::Added => add_exclusion(path)?,
-                        Diff::Removed => remove_exclusion(path)?,
-                    }
+            if *preview {
+                return Ok(());
+            }
+
+            let confirmation = if !*yes {
+                Confirm::new()
+                    .with_prompt("Do you wan't to apply these changes?")
+                    .interact()?
+            } else {
+                true
+            };
+
+            if !confirmation {
+                info!("Aborting");
+                return Ok(());
+            }
+
+            info!("Applying changes");
+
+            for (path, operation) in &changes {
+                match operation {
+                    Diff::Unchanged | Diff::Added => add_exclusion(path)?,
+                    Diff::Removed => remove_exclusion(path)?,
                 }
             }
 
-            if !preview {
-                write_cache(&Cache {
-                    paths: paths.iter().map(|e| e.to_string()).collect(),
-                })?
-            }
+            write_cache(&Cache {
+                paths: paths.iter().map(|e| e.to_string()).collect(),
+            })?;
+
+            info!("Changes successfully applied!");
         }
         None => {}
     }

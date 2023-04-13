@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.70"
 clap = { version = "4.2.1", features = ["derive"] }
+dialoguer = "0.10.4"
 env_logger = "0.10.0"
 indicatif = "0.17.3"
 lazy_static = "1.4.0"
