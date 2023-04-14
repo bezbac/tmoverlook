@@ -92,7 +92,7 @@ impl Evaluatable for EvalRule {
 
         assert!(output.status.success());
 
-        let path = PathBuf::from(String::from_utf8(output.stdout.to_vec())?)
+        let path = PathBuf::from(String::from_utf8(output.stdout)?)
             .to_str()
             .unwrap()
             .trim()
@@ -111,15 +111,6 @@ struct GitRepositoriesRule {
 
 impl Evaluatable for GitRepositoriesRule {
     fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()> {
-        info!("Searching for git repositories");
-
-        let spinner_style = ProgressStyle::with_template("{spinner} {wide_msg}")
-            .unwrap()
-            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
-
-        let pb = ProgressBar::new(0);
-        pb.set_style(spinner_style);
-
         fn walk(pb: &ProgressBar, found_directories: &mut BTreeSet<String>, dir: &PathBuf) {
             pb.inc(1);
             pb.set_message(format!("{}", dir.display()));
@@ -158,6 +149,15 @@ impl Evaluatable for GitRepositoriesRule {
                 }
             }
         }
+
+        info!("Searching for git repositories");
+
+        let spinner_style = ProgressStyle::with_template("{spinner} {wide_msg}")
+            .unwrap()
+            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
+
+        let pb = ProgressBar::new(0);
+        pb.set_style(spinner_style);
 
         for search_dir in &self.search {
             let root_dir = fs::canonicalize(shellexpand::tilde(search_dir).to_string())?;
@@ -281,7 +281,7 @@ fn main() -> Result<()> {
 
             info!("Currenly ignored paths:");
             for path in cache.paths {
-                info!("{}", path)
+                info!("{}", path);
             }
         }
         Some(Commands::Apply {
@@ -290,7 +290,7 @@ fn main() -> Result<()> {
             yes,
         }) => {
             if *preview {
-                info!("Preview mode is active, no changes will be applied",)
+                info!("Preview mode is active, no changes will be applied");
             }
 
             let config = read_config(config.as_deref());
@@ -340,12 +340,12 @@ fn main() -> Result<()> {
                 return Ok(());
             }
 
-            let confirmation = if !*yes {
+            let confirmation = if *yes {
+                true
+            } else {
                 Confirm::new()
                     .with_prompt("Do you wan't to apply these changes?")
                     .interact()?
-            } else {
-                true
             };
 
             if !confirmation {
