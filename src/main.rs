@@ -325,7 +325,7 @@ fn main() -> Result<()> {
                 })
                 .collect();
 
-            info!("Changes:");
+            info!("Diff:");
             for (path, operation) in &changes {
                 let diff_char = match operation {
                     Diff::Unchanged => "·",
@@ -337,6 +337,11 @@ fn main() -> Result<()> {
             }
 
             if *preview {
+                return Ok(());
+            }
+
+            if changes.iter().filter(|c| c.1 != Diff::Unchanged).count() == 0 {
+                info!("No changes to apply");
                 return Ok(());
             }
 
