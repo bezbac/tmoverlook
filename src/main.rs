@@ -1,14 +1,18 @@
+use anyhow::anyhow;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use dialoguer::Confirm;
 use env_logger::Builder;
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
+use log::debug;
+use log::warn;
 use log::{info, LevelFilter};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::fs::{self, DirEntry};
 use std::io::Write;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
@@ -24,6 +28,9 @@ lazy_static! {
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
+
+    #[arg(long)]
+    debug: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -236,7 +243,10 @@ fn add_exclusion(path: &str) -> Result<()> {
         .arg(path)
         .output()?;
 
-    assert!(output.status.success());
+    if !output.status.success() {
+        debug!("{:?}", String::from_utf8(output.stderr)?);
+        return Err(anyhow!("Failed to add exclusion for {}", path));
+    }
 
     Ok(())
 }
@@ -270,9 +280,21 @@ fn get_rule_priority(rule: &Rule) -> usize {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    let log_level = if cli.debug {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Info
+    };
+
     Builder::new()
-        .format(|buf, record| writeln!(buf, "{}", record.args()))
-        .filter(None, LevelFilter::Info)
+        .format(move |buf, record| {
+            if cli.debug && record.level() == LevelFilter::Debug {
+                writeln!(buf, "Debug: {}", record.args())
+            } else {
+                writeln!(buf, "{}", record.args())
+            }
+        })
+        .filter(None, log_level)
         .init();
 
     match &cli.command {
@@ -305,6 +327,18 @@ fn main() -> Result<()> {
             for rule in rules {
                 rule.evaluate(&mut paths)?;
             }
+
+            paths = paths
+                .into_iter()
+                .filter_map(|p| {
+                    if !Path::new(&p).exists() {
+                        warn!("Path {} does not exist, skipping", p);
+                        return None;
+                    }
+
+                    Some(p)
+                })
+                .collect();
 
             let changes: BTreeSet<_> = paths
                 .iter()
