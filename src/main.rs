@@ -24,6 +24,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     List {},
+    Analyze {},
     Apply {
         #[arg(short, long, value_name = "FILE")]
         config: Option<String>,
@@ -58,6 +59,7 @@ fn main() -> Result<()> {
 
     match &cli.command {
         Some(Commands::List {}) => commands::list::run(),
+        Some(Commands::Analyze {}) => commands::analyze::run(),
         Some(Commands::Apply {
             config: _,
             preview: _,
