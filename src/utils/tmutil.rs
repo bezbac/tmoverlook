@@ -3,6 +3,7 @@ use anyhow::Result;
 use log::debug;
 use serde::Deserialize;
 use std::process::Command;
+use std::str::FromStr;
 
 pub fn add_exclusion(path: &str) -> Result<()> {
     let output = Command::new("tmutil")
@@ -42,15 +43,45 @@ pub struct CompareInfoChangeItem {
     size: usize,
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CompareInfoChangeDifference {
     Size,
 }
 
+impl FromStr for CompareInfoChangeDifference {
+    type Err = ();
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "size" => Ok(Self::Size),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for CompareInfoChangeDifference {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let string = String::deserialize(deserializer)?;
+
+        let value = CompareInfoChangeDifference::from_str(&string);
+
+        match value {
+            Ok(value) => Ok(value),
+            Err(_) => Err(serde::de::Error::custom(format!(
+                "Unknown CompareInfoChangeDifference {}",
+                string,
+            ))),
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
 pub struct CompareInfoChange {
-    removed_volumne: Option<CompareInfoChangeItem>,
+    removed_volume: Option<CompareInfoChangeItem>,
     differences: Option<Vec<CompareInfoChangeDifference>>,
     newer_item: Option<CompareInfoChangeItem>,
     older_item: Option<CompareInfoChangeItem>,
@@ -196,9 +227,23 @@ mod tests {
 
         let compare_info: CompareInfo = read_compare_info(&example_str).unwrap();
 
-        assert_eq!(compare_info.changes.len(), 4);
         assert_eq!(compare_info.totals.added_size, 406080329);
         assert_eq!(compare_info.totals.changed_size, 217331952);
         assert_eq!(compare_info.totals.removed_size, 855240312822);
+
+        assert_eq!(compare_info.changes.len(), 4);
+
+        assert_eq!(compare_info.changes[0].removed_volume.is_some(), true);
+
+        assert_eq!(compare_info.changes[1].added_item.is_some(), true);
+
+        assert_eq!(compare_info.changes[2].removed_item.is_some(), true);
+
+        assert_eq!(
+            compare_info.changes[3].differences,
+            Some(vec![CompareInfoChangeDifference::Size])
+        );
+        assert_eq!(compare_info.changes[3].older_item.is_some(), true);
+        assert_eq!(compare_info.changes[3].newer_item.is_some(), true);
     }
 }
