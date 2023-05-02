@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use log::debug;
+use serde::de::Error;
 use serde::Deserialize;
 use std::process::Command;
 use std::str::FromStr;
@@ -78,15 +79,66 @@ impl<'de> Deserialize<'de> for CompareInfoChangeDifference {
     }
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-pub struct CompareInfoChange {
-    removed_volume: Option<CompareInfoChangeItem>,
-    differences: Option<Vec<CompareInfoChangeDifference>>,
-    newer_item: Option<CompareInfoChangeItem>,
-    older_item: Option<CompareInfoChangeItem>,
-    added_item: Option<CompareInfoChangeItem>,
-    removed_item: Option<CompareInfoChangeItem>,
+#[derive(Debug)]
+pub enum CompareInfoChange {
+    RemovedItem(CompareInfoChangeItem),
+    AddedItem(CompareInfoChangeItem),
+    RemovedVolume(CompareInfoChangeItem),
+    ModifiedItem {
+        older: CompareInfoChangeItem,
+        newer: CompareInfoChangeItem,
+        differences: Vec<CompareInfoChangeDifference>,
+    },
+}
+
+impl<'de> Deserialize<'de> for CompareInfoChange {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize, Debug)]
+        #[serde(rename_all = "PascalCase")]
+        pub struct ProtoCompareInfoChange {
+            removed_volume: Option<CompareInfoChangeItem>,
+            differences: Option<Vec<CompareInfoChangeDifference>>,
+            newer_item: Option<CompareInfoChangeItem>,
+            older_item: Option<CompareInfoChangeItem>,
+            added_item: Option<CompareInfoChangeItem>,
+            removed_item: Option<CompareInfoChangeItem>,
+        }
+
+        let change = ProtoCompareInfoChange::deserialize(deserializer)?;
+
+        if let Some(item) = change.added_item {
+            return Ok(CompareInfoChange::AddedItem(item));
+        }
+
+        if let Some(item) = change.removed_item {
+            return Ok(CompareInfoChange::RemovedItem(item));
+        }
+
+        if let Some(item) = change.removed_volume {
+            return Ok(CompareInfoChange::RemovedVolume(item));
+        }
+
+        let older = change
+            .older_item
+            .ok_or(D::Error::custom(format!("Missing OlderItem")))?;
+
+        let newer = change
+            .newer_item
+            .ok_or(D::Error::custom(format!("Missing NewerItem")))?;
+
+        let differences = change
+            .differences
+            .ok_or(D::Error::custom(format!("Missing Differences")))?;
+
+        Ok(CompareInfoChange::ModifiedItem {
+            older,
+            newer,
+            differences,
+        })
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -233,17 +285,36 @@ mod tests {
 
         assert_eq!(compare_info.changes.len(), 4);
 
-        assert_eq!(compare_info.changes[0].removed_volume.is_some(), true);
+        assert!(matches!(
+            compare_info.changes[0],
+            CompareInfoChange::RemovedVolume(..)
+        ));
 
-        assert_eq!(compare_info.changes[1].added_item.is_some(), true);
+        assert!(matches!(
+            compare_info.changes[1],
+            CompareInfoChange::AddedItem(..)
+        ));
 
-        assert_eq!(compare_info.changes[2].removed_item.is_some(), true);
+        assert!(matches!(
+            compare_info.changes[2],
+            CompareInfoChange::RemovedItem(..)
+        ));
 
-        assert_eq!(
-            compare_info.changes[3].differences,
-            Some(vec![CompareInfoChangeDifference::Size])
-        );
-        assert_eq!(compare_info.changes[3].older_item.is_some(), true);
-        assert_eq!(compare_info.changes[3].newer_item.is_some(), true);
+        assert!(matches!(
+            &compare_info.changes[3],
+            CompareInfoChange::ModifiedItem { .. }
+        ));
+
+        // TODO: Find nicer way
+        if let CompareInfoChange::ModifiedItem {
+            differences,
+            older: _,
+            newer: _,
+        } = &compare_info.changes[3]
+        {
+            assert_eq!(differences, &vec![CompareInfoChangeDifference::Size])
+        } else {
+            assert!(false)
+        };
     }
 }
