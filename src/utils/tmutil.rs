@@ -23,7 +23,10 @@ pub fn remove_exclusion(path: &str) -> Result<()> {
         .arg(path)
         .output()?;
 
-    assert!(output.status.success());
+    if !output.status.success() {
+        debug!("{:?}", String::from_utf8(output.stderr)?);
+        return Err(anyhow!("Failed to remove exclusion for {}", path));
+    }
 
     Ok(())
 }

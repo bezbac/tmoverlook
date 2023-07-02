@@ -43,7 +43,9 @@ pub fn run(cmd: &Commands) -> Result<()> {
     rules.sort_by_key(|a| std::cmp::Reverse(a.get_priority()));
 
     for rule in rules {
-        rule.evaluate(&mut paths)?;
+        rule.evaluate(&mut paths).unwrap_or_else(|_| {
+            warn!("Failed to evaluate rule {:?}", rule);
+        });
     }
 
     paths = paths
@@ -114,8 +116,12 @@ pub fn run(cmd: &Commands) -> Result<()> {
 
     for (path, operation) in &changes {
         match operation {
-            Diff::Unchanged | Diff::Added => add_exclusion(path)?,
-            Diff::Removed => remove_exclusion(path)?,
+            Diff::Unchanged | Diff::Added => add_exclusion(path).unwrap_or_else(|_| {
+                warn!("Failed to add exclusion for {}", path);
+            }),
+            Diff::Removed => remove_exclusion(path).unwrap_or_else(|_| {
+                warn!("Failed to remove exclusion for {}", path);
+            }),
         }
     }
 
