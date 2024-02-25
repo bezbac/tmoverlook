@@ -1,5 +1,6 @@
 use super::Evaluatable;
 use anyhow::Result;
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
@@ -33,13 +34,35 @@ impl Evaluatable for Rule {
     fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()> {
         let output = execute_shell_command(&self.shell, &self.command)?;
 
-        assert!(output.status.success());
+        if !output.status.success() {
+            warn!(
+                "'{}' exited with status code {}, run tmoverlook in debug mode for more information",
+                self.command, output.status
+            );
 
-        let path = PathBuf::from(String::from_utf8(output.stdout)?)
-            .to_str()
-            .unwrap()
-            .trim()
-            .to_string();
+            debug!("{}", std::str::from_utf8(&output.stdout)?);
+            debug!("{}", std::str::from_utf8(&output.stderr)?);
+
+            return Err(anyhow::anyhow!(
+                "Failed to execute command '{}'",
+                self.command
+            ));
+        }
+
+        let path = PathBuf::from(String::from_utf8(output.stdout)?.trim());
+
+        if !path.exists() {
+            warn!(
+                "The command returned a nonexistent path: '{}'",
+                path.display()
+            );
+            return Err(anyhow::anyhow!(
+                "The command returned a nonexistent path '{}'",
+                self.command
+            ));
+        }
+
+        let path = path.to_str().unwrap().trim().to_string();
 
         paths.insert(path);
 

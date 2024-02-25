@@ -33,7 +33,11 @@ pub fn run(cmd: &Commands) -> Result<()> {
         info!("Preview mode is active, no changes will be applied");
     }
 
-    let config = Config::read(config.as_deref().unwrap_or(&DEFAULT_CONFIG_PATH))?;
+    let config_path = config.as_deref().unwrap_or(&DEFAULT_CONFIG_PATH);
+
+    let config = Config::read(config_path)
+        .map_err(|err| anyhow::anyhow!("Could not read config file '{}'", config_path))?;
+
     let cache = Cache::read(&DEFAULT_CACHE_PATH)?;
 
     let mut paths: BTreeSet<String> = cache.paths.clone();
@@ -52,7 +56,7 @@ pub fn run(cmd: &Commands) -> Result<()> {
         .into_iter()
         .filter_map(|p| {
             if !Path::new(&p).exists() {
-                warn!("Path {} does not exist, skipping", p);
+                warn!("Path '{}' does not exist, skipping", p);
                 return None;
             }
 
