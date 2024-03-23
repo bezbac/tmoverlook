@@ -37,7 +37,7 @@ pub fn run(cmd: &Commands) -> Result<()> {
     let config_path = config.as_deref().unwrap_or(&DEFAULT_CONFIG_PATH);
 
     let config = Config::read(config_path)
-        .map_err(|err| anyhow::anyhow!("Could not read config file '{}'", config_path))?;
+        .map_err(|_| anyhow::anyhow!("Could not read config file '{}'", config_path))?;
 
     let cache = Cache::read(&DEFAULT_CACHE_PATH)?;
 
