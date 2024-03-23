@@ -25,7 +25,8 @@ pub fn run(cmd: &Commands) -> Result<()> {
         config,
         yes,
         preview,
-    } = cmd else {
+    } = cmd
+    else {
         panic!("Invalid command passed to run");
     };
 
