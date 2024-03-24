@@ -1,11 +1,15 @@
-name: "Build"
+name: "Release"
 
 on:
   workflow_dispatch:
   push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+        # Push events to any matching semantic version tag.
+        # For example, 1.10.1 or 2.0.0 or 3.0.0-alpha.
 
 jobs:
-  build:
+  release:
     runs-on: macos-latest
 
     permissions:
@@ -52,3 +56,34 @@ jobs:
         with:
           name: tmoverlook_aarch64-apple-darwin
           path: ./target/aarch64-apple-darwin/release/tmoverlook
+
+      - name: Move binary to release directory
+        run: |
+          mkdir -p release
+          mv ./target/x86_64-apple-darwin/release/tmoverlook ./release/tmoverlook_x86_64-apple-darwin
+          mv ./target/aarch64-apple-darwin/release/tmoverlook ./release/tmoverlook_aarch64-apple-darwin
+
+      - name: Build changelog
+        id: changelog
+        uses: mikepenz/release-changelog-builder-action@v4
+        with:
+          configuration: "release-changelog-builder-config.json"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get the version
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
+
+      - name: Create release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref }}
+          name: Release ${{ steps.get_version.outputs.VERSION }}
+          body: ${{steps.changelog.outputs.changelog}}
+          draft: false
+          prerelease: false
+          files: |
+            ./release/tmoverlook_x86_64-apple-darwin
+            ./release/tmoverlook_aarch64-apple-darwin
