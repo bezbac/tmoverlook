@@ -2,7 +2,7 @@ use super::Evaluatable;
 use anyhow::Result;
 use log::warn;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, fs};
+use std::{collections::BTreeSet, fs, path::PathBuf};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Rule {
@@ -10,16 +10,12 @@ pub struct Rule {
 }
 
 impl Evaluatable for Rule {
-    fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()> {
+    fn evaluate(&self, paths: &mut BTreeSet<PathBuf>) -> Result<()> {
         let expanded = fs::canonicalize(shellexpand::tilde(&self.path).to_string());
 
         match expanded {
             Ok(path) => {
-                let path = path.to_str().map(|str| str.to_string());
-
-                if let Some(path) = path {
-                    paths.insert(path);
-                }
+                paths.insert(path);
 
                 Ok(())
             }

@@ -11,7 +11,7 @@ use dialoguer::Confirm;
 use log::info;
 use log::warn;
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(PartialEq, PartialOrd, Eq, Ord)]
 enum Diff {
@@ -34,14 +34,23 @@ pub fn run(cmd: &Commands) -> Result<()> {
         info!("Preview mode is active, no changes will be applied");
     }
 
-    let config_path = config.as_deref().unwrap_or(&DEFAULT_CONFIG_PATH);
+    let config_path = config
+        .as_ref()
+        .map(|c| PathBuf::from(c))
+        .unwrap_or(DEFAULT_CONFIG_PATH.to_path_buf());
 
-    let config = Config::read(config_path)
-        .map_err(|_| anyhow::anyhow!("Could not read config file '{}'", config_path))?;
+    let config = Config::read(&config_path).map_err(|_| {
+        anyhow::anyhow!(
+            "Could not read config file '{}'",
+            config_path.to_string_lossy()
+        )
+    })?;
+
+    info!("Using config file '{}'", config_path.to_string_lossy());
 
     let cache = Cache::read(&DEFAULT_CACHE_PATH)?;
 
-    let mut paths: BTreeSet<String> = cache.paths.clone();
+    let mut paths: BTreeSet<PathBuf> = cache.paths.clone();
 
     let mut rules = config.rules;
 
@@ -56,8 +65,8 @@ pub fn run(cmd: &Commands) -> Result<()> {
     paths = paths
         .into_iter()
         .filter_map(|p| {
-            if !Path::new(&p).exists() {
-                warn!("Path '{}' does not exist, skipping", p);
+            if !p.exists() {
+                warn!("Path '{}' does not exist, skipping", p.display());
                 return None;
             }
 
@@ -92,7 +101,7 @@ pub fn run(cmd: &Commands) -> Result<()> {
             Diff::Removed => "-",
         };
 
-        info!("{} {}", diff_char, path);
+        info!("{} {}", diff_char, path.display());
     }
 
     if *preview {
@@ -122,16 +131,16 @@ pub fn run(cmd: &Commands) -> Result<()> {
     for (path, operation) in &changes {
         match operation {
             Diff::Unchanged | Diff::Added => add_exclusion(path).unwrap_or_else(|_| {
-                warn!("Failed to add exclusion for {}", path);
+                warn!("Failed to add exclusion for {}", path.display());
             }),
             Diff::Removed => remove_exclusion(path).unwrap_or_else(|_| {
-                warn!("Failed to remove exclusion for {}", path);
+                warn!("Failed to remove exclusion for {}", path.display());
             }),
         }
     }
 
     Cache {
-        paths: paths.iter().map(|e| e.to_string()).collect(),
+        paths: paths.iter().cloned().collect(),
     }
     .write(&DEFAULT_CACHE_PATH)?;
 

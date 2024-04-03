@@ -31,7 +31,7 @@ pub struct Rule {
 }
 
 impl Evaluatable for Rule {
-    fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()> {
+    fn evaluate(&self, paths: &mut BTreeSet<PathBuf>) -> Result<()> {
         let output = execute_shell_command(&self.shell, &self.command)?;
 
         if !output.status.success() {
@@ -61,8 +61,6 @@ impl Evaluatable for Rule {
                 self.command
             ));
         }
-
-        let path = path.to_str().unwrap().trim().to_string();
 
         paths.insert(path);
 

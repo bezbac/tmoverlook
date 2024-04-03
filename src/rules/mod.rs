@@ -1,13 +1,13 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, path::PathBuf};
 
 mod eval;
 mod git;
 mod path;
 
 pub trait Evaluatable {
-    fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()>;
+    fn evaluate(&self, paths: &mut BTreeSet<PathBuf>) -> Result<()>;
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -20,7 +20,7 @@ pub enum Rule {
 }
 
 impl Evaluatable for Rule {
-    fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()> {
+    fn evaluate(&self, paths: &mut BTreeSet<PathBuf>) -> Result<()> {
         match &self {
             Rule::Path(rule) => rule.evaluate(paths),
             Rule::Eval(rule) => rule.evaluate(paths),

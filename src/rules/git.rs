@@ -15,8 +15,8 @@ pub struct Rule {
 }
 
 impl Evaluatable for Rule {
-    fn evaluate(&self, paths: &mut BTreeSet<String>) -> Result<()> {
-        fn walk(pb: &ProgressBar, found_directories: &mut BTreeSet<String>, dir: &PathBuf) {
+    fn evaluate(&self, paths: &mut BTreeSet<PathBuf>) -> Result<()> {
+        fn walk(pb: &ProgressBar, found_directories: &mut BTreeSet<PathBuf>, dir: &PathBuf) {
             pb.inc(1);
             pb.set_message(format!("{}", dir.display()));
 
@@ -39,12 +39,8 @@ impl Evaluatable for Rule {
 
                 for dir in &subdirectories {
                     if dir.path().ends_with(".git") {
-                        if let Some(Some(parent)) = dir
-                            .path()
-                            .parent()
-                            .map(|p| p.to_str().map(|str| str.to_string()))
-                        {
-                            found_directories.insert(parent);
+                        if let Some(parent) = dir.path().parent() {
+                            found_directories.insert(parent.to_path_buf());
                         }
                     }
                 }

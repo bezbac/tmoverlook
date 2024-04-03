@@ -1,9 +1,10 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use log::debug;
+use std::path::PathBuf;
 use std::process::Command;
 
-pub fn add_exclusion(path: &str) -> Result<()> {
+pub fn add_exclusion(path: &PathBuf) -> Result<()> {
     let output = Command::new("tmutil")
         .arg("addexclusion")
         .arg(path)
@@ -11,13 +12,13 @@ pub fn add_exclusion(path: &str) -> Result<()> {
 
     if !output.status.success() {
         debug!("{:?}", String::from_utf8(output.stderr)?);
-        return Err(anyhow!("Failed to add exclusion for {}", path));
+        return Err(anyhow!("Failed to add exclusion for {}", path.display()));
     }
 
     Ok(())
 }
 
-pub fn remove_exclusion(path: &str) -> Result<()> {
+pub fn remove_exclusion(path: &PathBuf) -> Result<()> {
     let output = Command::new("tmutil")
         .arg("removeexclusion")
         .arg(path)
@@ -25,7 +26,7 @@ pub fn remove_exclusion(path: &str) -> Result<()> {
 
     if !output.status.success() {
         debug!("{:?}", String::from_utf8(output.stderr)?);
-        return Err(anyhow!("Failed to remove exclusion for {}", path));
+        return Err(anyhow!("Failed to remove exclusion for {}", path.display()));
     }
 
     Ok(())

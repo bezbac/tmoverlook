@@ -10,7 +10,7 @@ pub fn run() -> Result<()> {
     } else {
         info!("Currenly ignored paths:");
         for path in cache.paths {
-            info!("{}", path);
+            info!("{}", path.display());
         }
     }
 
