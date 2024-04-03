@@ -64,13 +64,12 @@ pub fn run(cmd: &Commands) -> Result<()> {
 
     paths = paths
         .into_iter()
-        .filter_map(|p| {
-            if !p.exists() {
-                warn!("Path '{}' does not exist, skipping", p.display());
-                return None;
+        .filter_map(|p| match std::fs::canonicalize(&p).ok() {
+            Some(path) => Some(path),
+            None => {
+                warn!("Path '{}' does not exist, skipping", &p.display());
+                None
             }
-
-            Some(p)
         })
         .collect();
 
