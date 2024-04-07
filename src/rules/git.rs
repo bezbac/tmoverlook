@@ -1,7 +1,7 @@
 use super::Evaluatable;
 use anyhow::Result;
 use indicatif::{ProgressBar, ProgressStyle};
-use log::info;
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
@@ -16,6 +16,8 @@ pub struct Rule {
 
 impl Evaluatable for Rule {
     fn evaluate(&self, paths: &mut BTreeSet<PathBuf>) -> Result<()> {
+        let mut new_paths = BTreeSet::new();
+
         fn walk(pb: &ProgressBar, found_directories: &mut BTreeSet<PathBuf>, dir: &PathBuf) {
             pb.inc(1);
             pb.set_message(format!("{}", dir.display()));
@@ -62,12 +64,15 @@ impl Evaluatable for Rule {
 
         for search_dir in &self.search {
             let root_dir = fs::canonicalize(shellexpand::tilde(search_dir).to_string())?;
-            walk(&pb, paths, &root_dir);
+            debug!("Searching in '{}'", root_dir.display());
+            walk(&pb, &mut new_paths, &root_dir);
         }
 
         pb.finish_and_clear();
 
-        info!("Found {} git repositories", paths.len());
+        info!("Found {} git repositories", new_paths.len());
+
+        paths.extend(new_paths.iter().cloned());
 
         Ok(())
     }
