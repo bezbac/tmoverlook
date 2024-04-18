@@ -1,6 +1,7 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
 use env_logger::Builder;
+use environment::{OVERWRITTEN_HOME_DIR, OVERWRITTEN_PREFIX_DIR};
 use log::LevelFilter;
 use std::io::Write;
 
@@ -8,6 +9,7 @@ mod cache;
 mod commands;
 mod config;
 mod contants;
+mod environment;
 mod rules;
 mod utils;
 
@@ -19,6 +21,12 @@ struct Cli {
 
     #[arg(long)]
     debug: bool,
+
+    #[arg(long, hide = true)]
+    prefix_dir: Option<String>,
+
+    #[arg(long, hide = true)]
+    home_dir: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -44,6 +52,24 @@ fn main() -> Result<()> {
     } else {
         LevelFilter::Info
     };
+
+    if cli.prefix_dir.is_some() {
+        OVERWRITTEN_PREFIX_DIR.set(cli.prefix_dir).map_err(|val| {
+            anyhow!(
+                "Could not overwrite prefix directory. Already set to {:?}",
+                val
+            )
+        })?;
+    }
+
+    if cli.home_dir.is_some() {
+        OVERWRITTEN_HOME_DIR.set(cli.home_dir).map_err(|val| {
+            anyhow!(
+                "Could not overwrite home directory. Already set to {:?}",
+                val
+            )
+        })?;
+    }
 
     Builder::new()
         .format(move |buf, record| {

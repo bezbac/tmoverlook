@@ -2,9 +2,11 @@ use std::path::PathBuf;
 
 use lazy_static::lazy_static;
 
+use crate::environment;
+
 lazy_static! {
     pub static ref DEFAULT_CONFIG_PATH: PathBuf =
-        PathBuf::from(shellexpand::tilde("~/.config/tmoverlook/config.toml").to_string());
+        environment::expand_path(&"~/.config/tmoverlook/config.toml").unwrap();
     pub static ref DEFAULT_CACHE_PATH: PathBuf =
-        PathBuf::from(shellexpand::tilde("~/.local/share/tmoverlook/cache.toml").to_string());
+        environment::expand_path(&"~/.local/share/tmoverlook/cache.toml").unwrap();
 }

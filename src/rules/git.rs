@@ -1,4 +1,5 @@
 use super::Evaluatable;
+use crate::environment;
 use anyhow::Result;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, info};
@@ -63,7 +64,7 @@ impl Evaluatable for Rule {
         pb.set_style(spinner_style);
 
         for search_dir in &self.search {
-            let root_dir = fs::canonicalize(shellexpand::tilde(search_dir).to_string())?;
+            let root_dir = environment::expand_path(search_dir)?;
             debug!("Searching in '{}'", root_dir.display());
             walk(&pb, &mut new_paths, &root_dir);
         }

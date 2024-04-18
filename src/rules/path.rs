@@ -1,4 +1,5 @@
 use super::Evaluatable;
+use crate::environment;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::PathBuf};
@@ -10,8 +11,8 @@ pub struct Rule {
 
 impl Evaluatable for Rule {
     fn evaluate(&self, paths: &mut BTreeSet<PathBuf>) -> Result<()> {
-        let expanded = shellexpand::tilde(&self.path);
-        paths.insert(PathBuf::from(expanded.to_string()));
+        let path = environment::expand_path(&self.path)?;
+        paths.insert(path);
         Ok(())
     }
 }
