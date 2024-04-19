@@ -31,7 +31,13 @@ jobs:
         run: cargo fmt --check
 
       - name: Check clippy
-        run: cargo clippy -- -D clippy::all -D clippy::pedantic -A clippy::redundant_closure -A clippy::redundant_closure_for_method_calls
+        run: |
+          cargo clippy -- \
+          -D clippy::all \
+          -D clippy::pedantic \
+          -A clippy::redundant_closure \
+          -A clippy::redundant_closure_for_method_calls \
+          -A clippy::too-many-lines
 
       - name: Execute tests
         run: cargo test

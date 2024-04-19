@@ -17,8 +17,6 @@ pub struct Rule {
 
 impl Evaluatable for Rule {
     fn evaluate(&self, paths: &mut BTreeSet<PathBuf>) -> Result<()> {
-        let mut new_paths = BTreeSet::new();
-
         fn walk(pb: &ProgressBar, found_directories: &mut BTreeSet<PathBuf>, dir: &PathBuf) {
             pb.inc(1);
             pb.set_message(format!("{}", dir.display()));
@@ -53,6 +51,8 @@ impl Evaluatable for Rule {
                 }
             }
         }
+
+        let mut new_paths = BTreeSet::new();
 
         info!("Searching for git repositories");
 

@@ -25,9 +25,7 @@ pub fn expand_path<P: AsRef<str>>(
     input: &P,
 ) -> std::result::Result<PathBuf, core::convert::Infallible> {
     let home_dir = {
-        let default_home_dir = dirs::home_dir()
-            .map(|d| d.to_str().map(|s| s.to_string()))
-            .flatten();
+        let default_home_dir = dirs::home_dir().and_then(|d| d.to_str().map(|s| s.to_string()));
 
         OVERWRITTEN_HOME_DIR
             .get()
@@ -35,7 +33,7 @@ pub fn expand_path<P: AsRef<str>>(
             .clone()
     };
 
-    let prefix_dir = OVERWRITTEN_PREFIX_DIR.get().map(|v| v.clone()).flatten();
+    let prefix_dir = OVERWRITTEN_PREFIX_DIR.get().cloned().flatten();
 
     expand_and_prefix_path(input, prefix_dir, home_dir)
 

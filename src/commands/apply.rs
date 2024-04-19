@@ -36,8 +36,7 @@ pub fn run(cmd: &Commands) -> Result<()> {
 
     let config_path = config
         .as_ref()
-        .map(|c| PathBuf::from(c))
-        .unwrap_or(DEFAULT_CONFIG_PATH.to_path_buf());
+        .map_or(DEFAULT_CONFIG_PATH.to_path_buf(), |c| PathBuf::from(c));
 
     let config = Config::read(&config_path).map_err(|_| {
         anyhow::anyhow!(
@@ -64,10 +63,11 @@ pub fn run(cmd: &Commands) -> Result<()> {
 
     paths = paths
         .into_iter()
-        .filter_map(|p| match std::fs::canonicalize(&p).ok() {
-            Some(path) => Some(path),
-            None => {
-                warn!("Path '{}' does not exist, skipping", &p.display());
+        .filter_map(|p| {
+            if let Ok(path) = std::fs::canonicalize(&p) {
+                Some(path)
+            } else {
+                warn!("Failed to canonicalize path '{}', skipping", &p.display());
                 None
             }
         })
