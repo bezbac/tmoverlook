@@ -1,5 +1,4 @@
 use assert_cmd::prelude::*;
-use flate2::read::GzDecoder;
 use indoc::indoc;
 use std::fs::File;
 use std::process::{Command, Stdio};
@@ -8,8 +7,7 @@ use tempdir::TempDir;
 
 #[test]
 fn test_add() {
-    let tar_gz = File::open("tests/fixtures/example_file_system.tar.gz").unwrap();
-    let tar = GzDecoder::new(tar_gz);
+    let tar = File::open("tests/fixtures/example_file_system.tar").unwrap();
     let mut archive = Archive::new(tar);
 
     let tmp_dir = TempDir::new("").unwrap();

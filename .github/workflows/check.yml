@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: "true"
 
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@stable
