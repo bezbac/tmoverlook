@@ -43,53 +43,38 @@ pub fn expand_path<P: AsRef<str>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
-    #[test]
-    fn test_expand_and_prefix_path_valid() {
+    #[rstest]
+    #[case("/", None, None, "/")]
+    #[case("~/Downloads", None, Some("/Users/bob"), "/Users/bob/Downloads")]
+    #[case("/Volume/My SSD", None, Some("/Users/bob"), "/Volume/My SSD")]
+    #[case(
+        "~/Downloads",
+        Some("/some/prefix/dir"),
+        Some("/Users/bob"),
+        "/some/prefix/dir/Users/bob/Downloads"
+    )]
+    #[case(
+        "/Volume/My SSD",
+        Some("/some/prefix/dir"),
+        Some("/Users/bob"),
+        "/some/prefix/dir/Volume/My SSD"
+    )]
+    fn expand_path_test(
+        #[case] input: &str,
+        #[case] prefix_dir: Option<&str>,
+        #[case] home_dir: Option<&str>,
+        #[case] expected: &str,
+    ) {
         assert_eq!(
-            expand_and_prefix_path(&String::from("/"), None, None)
-                .map(|path| path.to_str().unwrap().to_string()),
-            Ok(String::from("/"))
-        );
-
-        assert_eq!(
+            Ok(expected.to_string()),
             expand_and_prefix_path(
-                &String::from("~/Downloads"),
-                None,
-                Some(String::from("/Users/bob"))
+                &input.to_string(),
+                prefix_dir.map(|s| s.to_string()),
+                home_dir.map(|s| s.to_string())
             )
-            .map(|path| path.to_str().unwrap().to_string()),
-            Ok(String::from("/Users/bob/Downloads"))
-        );
-
-        assert_eq!(
-            expand_and_prefix_path(
-                &String::from("/Volume/My SSD"),
-                None,
-                Some(String::from("/Users/bob"))
-            )
-            .map(|path| path.to_str().unwrap().to_string()),
-            Ok(String::from("/Volume/My SSD"))
-        );
-
-        assert_eq!(
-            expand_and_prefix_path(
-                &String::from("~/Downloads"),
-                Some(String::from("/some/prefix/dir")),
-                Some(String::from("/Users/bob"))
-            )
-            .map(|path| path.to_str().unwrap().to_string()),
-            Ok(String::from("/some/prefix/dir/Users/bob/Downloads"))
-        );
-
-        assert_eq!(
-            expand_and_prefix_path(
-                &String::from("/Volume/My SSD"),
-                Some(String::from("/some/prefix/dir")),
-                Some(String::from("/Users/bob"))
-            )
-            .map(|path| path.to_str().unwrap().to_string()),
-            Ok(String::from("/some/prefix/dir/Volume/My SSD"))
-        );
+            .map(|path| path.to_str().unwrap().to_string())
+        )
     }
 }
